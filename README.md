@@ -31,8 +31,4 @@ Firewall-Centric-Network-Security/
 ```
 
 ## Team
-Shruti Pawar
-Raina Girish
-Saniya Mohan
-Aditya Pillai
-Adithyan Krishna Kumar
+Shruti Pawar, Raina Girish, Saniya Mohan, Aditya Pillai, Adithyan Krishna Kumar
