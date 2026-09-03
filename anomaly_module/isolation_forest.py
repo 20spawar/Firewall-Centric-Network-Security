@@ -1,10 +1,9 @@
-from pathlib import Path
-
 import joblib
+
 from sklearn.ensemble import IsolationForest
 
 
-class IsolationForestModel:
+class IsolationForestDetector:
 
     def __init__(
         self,
@@ -12,6 +11,7 @@ class IsolationForestModel:
         contamination="auto",
         random_state=42
     ):
+
         self.model = IsolationForest(
             n_estimators=n_estimators,
             contamination=contamination,
@@ -20,39 +20,28 @@ class IsolationForestModel:
         )
 
     def fit(self, X):
-        """
-        Train the Isolation Forest.
-        """
+
         self.model.fit(X)
+
         return self
 
     def predict(self, X):
-        """
-        Return Isolation Forest predictions.
 
-        1  = normal
-        -1 = anomaly
-        """
         return self.model.predict(X)
 
-    def score(self, X):
-        """
-        Return anomaly decision scores.
-        """
+    def decision_function(self, X):
+
         return self.model.decision_function(X)
 
     def save(self, path):
-        """
-        Save trained model.
-        """
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
 
-        joblib.dump(self.model, path)
+        joblib.dump(
+            self.model,
+            path
+        )
 
     def load(self, path):
-        """
-        Load a previously trained model.
-        """
+
         self.model = joblib.load(path)
+
         return self

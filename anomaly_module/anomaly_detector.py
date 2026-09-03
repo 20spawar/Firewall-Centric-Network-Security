@@ -1,11 +1,19 @@
-import pandas as pd
+from pathlib import Path
 
-from .isolation_forest import IsolationForestModel
+import joblib
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+
 from .config import (
-    N_ESTIMATORS,
     CONTAMINATION,
-    RANDOM_STATE
+    MODEL_PATH,
+    N_ESTIMATORS,
+    RANDOM_STATE,
 )
+
+from .isolation_forest import IsolationForestDetector
 
 
 class AnomalyDetector:
@@ -14,38 +22,212 @@ class AnomalyDetector:
         self,
         n_estimators=N_ESTIMATORS,
         contamination=CONTAMINATION,
-        random_state=RANDOM_STATE
+        random_state=RANDOM_STATE,
     ):
 
-        self.model = IsolationForestModel(
-            n_estimators=n_estimators,
-            contamination=contamination,
-            random_state=random_state
+        self.imputer = SimpleImputer(
+            strategy="median"
         )
 
-    def fit(self, X):
-        """
-        Train the anomaly detection model.
-        """
+        self.scaler = StandardScaler()
+
+        self.model = IsolationForestDetector(
+            n_estimators=n_estimators,
+            contamination=contamination,
+            random_state=random_state,
+        )
+
+        self.feature_columns = None
+
+        self.is_fitted = False
+
+    # ========================================================
+    # FIT
+    # ========================================================
+
+    def fit(self, df):
+
+        if "user" not in df.columns:
+            raise ValueError(
+                "Input data must contain a 'user' column."
+            )
+
+        self.feature_columns = [
+            column
+            for column in df.columns
+            if column != "user"
+        ]
+
+        X = df[self.feature_columns].copy()
+
+        X = self.imputer.fit_transform(X)
+
+        X = self.scaler.fit_transform(X)
+
         self.model.fit(X)
 
-    def predict(self, X):
-        """
-        Generate anomaly predictions.
-        """
+        self.is_fitted = True
+
+        return self
+
+    # ========================================================
+    # PREDICT
+    # ========================================================
+
+    def predict(self, df):
+
+        if not self.is_fitted:
+
+            raise RuntimeError(
+                "Model has not been fitted. "
+                "Call fit() first."
+            )
+
+        X = df[
+            self.feature_columns
+        ].copy()
+
+        X = self.imputer.transform(X)
+
+        X = self.scaler.transform(X)
 
         predictions = self.model.predict(X)
-        scores = self.model.score(X)
 
-        results = pd.DataFrame({
-            "anomaly_score": scores,
-            "is_anomaly": predictions == -1
-        })
+        decision_scores = (
+            self.model
+            .decision_function(X)
+        )
 
-        return results
+        anomaly_scores = (
+            self._convert_to_risk_score(
+                decision_scores
+            )
+        )
 
-    def save(self, path):
-        self.model.save(path)
+        result = pd.DataFrame()
 
-    def load(self, path):
-        self.model.load(path)
+        result["user"] = (
+            df["user"].values
+        )
+
+        result["anomaly_score"] = (
+            anomaly_scores
+        )
+
+        result["is_anomaly"] = (
+            predictions == -1
+        ).astype(int)
+
+        return result
+
+    # ========================================================
+    # FIT + PREDICT
+    # ========================================================
+
+    def fit_predict(self, df):
+
+        self.fit(df)
+
+        return self.predict(df)
+
+    # ========================================================
+    # SCORE CONVERSION
+    # ========================================================
+
+    @staticmethod
+    def _convert_to_risk_score(
+        decision_scores
+    ):
+
+        scores = np.asarray(
+            decision_scores,
+            dtype=float
+        )
+
+        minimum = scores.min()
+        maximum = scores.max()
+
+        if np.isclose(
+            minimum,
+            maximum
+        ):
+
+            return np.zeros(
+                len(scores)
+            )
+
+        normalized = (
+            scores - minimum
+        ) / (
+            maximum - minimum
+        )
+
+        # Isolation Forest:
+        # lower decision score = more anomalous
+        risk_scores = (
+            1 - normalized
+        ) * 100
+
+        return np.round(
+            risk_scores,
+            4
+        )
+
+    # ========================================================
+    # SAVE
+    # ========================================================
+
+    def save(
+        self,
+        path=MODEL_PATH
+    ):
+
+        path = Path(path)
+
+        path.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        package = {
+            "imputer": self.imputer,
+            "scaler": self.scaler,
+            "model": self.model.model,
+            "feature_columns": self.feature_columns,
+        }
+
+        joblib.dump(
+            package,
+            path
+        )
+
+    # ========================================================
+    # LOAD
+    # ========================================================
+
+    def load(
+        self,
+        path=MODEL_PATH
+    ):
+
+        package = joblib.load(path)
+
+        self.imputer = (
+            package["imputer"]
+        )
+
+        self.scaler = (
+            package["scaler"]
+        )
+
+        self.model.model = (
+            package["model"]
+        )
+
+        self.feature_columns = (
+            package["feature_columns"]
+        )
+
+        self.is_fitted = True
+
+        return self

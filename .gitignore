@@ -26,3 +26,6 @@ data/processed/
 
 # Environment Variables
 .env
+
+# Anomaly Module generated outputs
+anomaly_module/outputs/*.csv
