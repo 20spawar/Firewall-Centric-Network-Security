@@ -29,3 +29,6 @@ data/processed/
 
 # Anomaly Module generated outputs
 anomaly_module/outputs/*.csv
+
+# Fusion generated outputs
+fusion/outputs/*.csv
