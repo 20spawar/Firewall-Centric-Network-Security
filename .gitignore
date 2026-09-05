@@ -14,8 +14,8 @@ logs/
 *.log
 
 # Models
-models/*.pkl
-models/*.joblib
+# models/*.pkl
+# models/*.joblib
 
 # Data
 data/raw/
