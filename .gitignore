@@ -26,3 +26,8 @@ data/processed/
 
 # Environment Variables
 .env
+# XAI generated outputs
+xai/outputs/*.csv
+
+# XAI generated outputs
+xai/outputs/*.csv
