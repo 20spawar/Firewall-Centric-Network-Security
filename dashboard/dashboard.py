@@ -289,7 +289,7 @@ with col1:
 
     st.plotly_chart(
         insider_chart,
-        width="stretch"
+        use_container_width="stretch"
     )
 
 
@@ -320,7 +320,7 @@ with col2:
 
     st.plotly_chart(
         anomaly_chart,
-        width="stretch"
+        use_container_width="stretch"
     )
 
 
@@ -370,7 +370,7 @@ comparison_chart.update_layout(
 
 st.plotly_chart(
     comparison_chart,
-    width="stretch"
+    use_container_width="stretch"
 )
 
 
@@ -402,7 +402,7 @@ final_chart.update_layout(
 
 st.plotly_chart(
     final_chart,
-    width="stretch"
+    use_container_width="stretch"
 )
 
 
@@ -429,7 +429,7 @@ if len(high_risk_df) > 0:
 
     st.dataframe(
         high_risk_df,
-        width="stretch"
+        use_container_width="stretch"
     )
 
 else:
@@ -475,7 +475,7 @@ else:
 
 st.dataframe(
     search_result,
-    width="stretch"
+    use_container_width="stretch"
 )
 
 
@@ -489,7 +489,7 @@ st.header("📋 Complete Fusion Results")
 
 st.dataframe(
     df,
-    width="stretch"
+    use_container_width="stretch"
 )
 
 # ============================================================
@@ -692,7 +692,7 @@ else:
 
         st.plotly_chart(
             fig_fusion,
-            width=True
+            use_container_width=True
         )
 
         # ----------------------------------------------------
@@ -769,7 +769,7 @@ else:
 
                     st.plotly_chart(
                         fig_insider_shap,
-                        width=True
+                        use_container_width=True
                     )
 
                     st.caption(
@@ -784,7 +784,7 @@ else:
                                 "SHAP Contribution"
                             ]
                         ],
-                        width=True,
+                        use_container_width=True,
                         hide_index=True
                     )
 
@@ -817,7 +817,7 @@ else:
                             "contribution"
                         ]
                     ],
-                    width=True,
+                    use_container_width=True,
                     hide_index=True
                 )
 
@@ -899,7 +899,7 @@ else:
 
                     st.plotly_chart(
                         fig_anomaly_shap,
-                        width=True
+                        use_container_width=True
                     )
 
                     st.caption(
@@ -914,7 +914,7 @@ else:
                                 "SHAP Contribution"
                             ]
                         ],
-                        width=True,
+                        use_container_width=True,
                         hide_index=True
                     )
 
@@ -947,7 +947,7 @@ else:
                             "contribution"
                         ]
                     ],
-                    width=True,
+                    use_container_width=True,
                     hide_index=True
                 )
 
