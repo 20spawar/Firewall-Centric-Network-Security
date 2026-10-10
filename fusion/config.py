@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 
@@ -21,24 +22,25 @@ ANOMALY_OUTPUT = (
     / "anomaly_scores.csv"
 )
 
-OUTPUT_DIR = (
+PAYLOAD_OUTPUT = (
     PROJECT_ROOT
-    / "fusion"
+    / "payload_module"
     / "outputs"
+    / "payload_scores.csv"
 )
 
-FUSION_OUTPUT = (
-    OUTPUT_DIR
-    / "fusion_results.csv"
-)
+OUTPUT_DIR = PROJECT_ROOT / "fusion" / "outputs"
+
+FUSION_OUTPUT = OUTPUT_DIR / "fusion_results.csv"
 
 
 # ============================================================
 # FUSION WEIGHTS
 # ============================================================
 
-INSIDER_WEIGHT = 0.50
-ANOMALY_WEIGHT = 0.50
+PAYLOAD_WEIGHT = 1 / 3
+INSIDER_WEIGHT = 1 / 3
+ANOMALY_WEIGHT = 1 / 3
 
 
 # ============================================================

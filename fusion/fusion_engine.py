@@ -1,3 +1,4 @@
+
 import pandas as pd
 
 from .config import (
@@ -6,6 +7,7 @@ from .config import (
     INSIDER_WEIGHT,
     LOW_RISK_THRESHOLD,
     MEDIUM_RISK_THRESHOLD,
+    PAYLOAD_WEIGHT,
 )
 
 
@@ -13,225 +15,205 @@ class FusionEngine:
 
     def __init__(
         self,
+        payload_weight=PAYLOAD_WEIGHT,
         insider_weight=INSIDER_WEIGHT,
         anomaly_weight=ANOMALY_WEIGHT,
     ):
 
-        total_weight = (
-            insider_weight
-            + anomaly_weight
-        )
+        weights = {
+            "payload": payload_weight,
+            "insider": insider_weight,
+            "anomaly": anomaly_weight,
+        }
+
+        if any(weight < 0 for weight in weights.values()):
+            raise ValueError("Fusion weights cannot be negative.")
+
+        total_weight = sum(weights.values())
 
         if total_weight <= 0:
-            raise ValueError(
-                "Fusion weights must be greater than zero."
-            )
+            raise ValueError("At least one fusion weight must be positive.")
 
-        # Normalize weights so they always sum to 1.
-        self.insider_weight = (
-            insider_weight / total_weight
-        )
-
-        self.anomaly_weight = (
-            anomaly_weight / total_weight
-        )
+        self.payload_weight = payload_weight / total_weight
+        self.insider_weight = insider_weight / total_weight
+        self.anomaly_weight = anomaly_weight / total_weight
 
     # ========================================================
-    # LOAD AND VALIDATE
+    # VALIDATION
     # ========================================================
 
     @staticmethod
-    def validate_input(
-        df,
-        required_columns,
-        dataset_name,
-    ):
+    def validate_input(df, required_columns, dataset_name):
 
         missing = [
-            column
-            for column in required_columns
+            column for column in required_columns
             if column not in df.columns
         ]
 
         if missing:
             raise ValueError(
-                f"{dataset_name} is missing columns: "
-                f"{missing}"
+                f"{dataset_name} is missing columns: {missing}"
             )
 
         if df.empty:
-            raise ValueError(
-                f"{dataset_name} is empty."
-            )
+            raise ValueError(f"{dataset_name} is empty.")
 
     # ========================================================
-    # PREPARE INPUTS
+    # CLEAN USER-LEVEL INPUTS
     # ========================================================
 
-    def prepare_inputs(
-        self,
-        insider_df,
-        anomaly_df,
+    @staticmethod
+    def prepare_user_scores(
+        df,
+        score_column,
+        flag_column,
+        dataset_name,
     ):
 
-        self.validate_input(
+        FusionEngine.validate_input(
+            df,
+            ["user", score_column, flag_column],
+            dataset_name,
+        )
+
+        result = df[["user", score_column, flag_column]].copy()
+
+        result["user"] = result["user"].astype(str).str.strip()
+
+        if result["user"].eq("").any():
+            raise ValueError(
+                f"{dataset_name} contains empty user identifiers."
+            )
+
+        result[score_column] = pd.to_numeric(
+            result[score_column], errors="coerce"
+        )
+
+        if result[score_column].isna().any():
+            raise ValueError(
+                f"{dataset_name} contains missing or invalid scores."
+            )
+
+        result[score_column] = result[score_column].clip(0, 100)
+
+        result[flag_column] = pd.to_numeric(
+            result[flag_column], errors="coerce"
+        ).fillna(0).astype(int)
+
+        # Duplicate user rows require an explicit aggregation policy.
+        if result["user"].duplicated().any():
+            raise ValueError(
+                f"{dataset_name} contains duplicate users. "
+                "Aggregate scores per user before fusion."
+            )
+
+        return result
+
+    # ========================================================
+    # PREPARE AND MERGE MODULE OUTPUTS
+    # ========================================================
+
+    def prepare_inputs(self, insider_df, anomaly_df, payload_df):
+
+        insider = self.prepare_user_scores(
             insider_df,
-            [
-                "user",
-                "insider_score",
-                "is_insider",
-            ],
+            "insider_score",
+            "is_insider",
             "Insider output",
         )
 
-        self.validate_input(
+        anomaly = self.prepare_user_scores(
             anomaly_df,
-            [
-                "user",
-                "anomaly_score",
-                "is_anomaly",
-            ],
+            "anomaly_score",
+            "is_anomaly",
             "Anomaly output",
         )
 
-        insider = insider_df.copy()
-        anomaly = anomaly_df.copy()
-
-        # ----------------------------------------------------
-        # Clean user IDs
-        # ----------------------------------------------------
-
-        insider["user"] = (
-            insider["user"]
-            .astype(str)
-            .str.strip()
+        # Payload scores must be associated with actual users.
+        self.validate_input(
+            payload_df,
+            ["user", "payload_score"],
+            "Payload output",
         )
 
-        anomaly["user"] = (
-            anomaly["user"]
-            .astype(str)
-            .str.strip()
-        )
+        payload = payload_df[["user", "payload_score"]].copy()
+        payload["user"] = payload["user"].astype(str).str.strip()
 
-        # ----------------------------------------------------
-        # Convert scores to numeric
-        # ----------------------------------------------------
-
-        insider["insider_score"] = pd.to_numeric(
-            insider["insider_score"],
-            errors="coerce",
-        )
-
-        anomaly["anomaly_score"] = pd.to_numeric(
-            anomaly["anomaly_score"],
-            errors="coerce",
-        )
-
-        # ----------------------------------------------------
-        # Keep only required columns
-        # ----------------------------------------------------
-
-        insider = insider[
-            [
-                "user",
-                "insider_score",
-                "is_insider",
-            ]
-        ]
-
-        anomaly = anomaly[
-            [
-                "user",
-                "anomaly_score",
-                "is_anomaly",
-            ]
-        ]
-
-        # ----------------------------------------------------
-        # Remove duplicate users
-        # ----------------------------------------------------
-
-        insider = (
-            insider
-            .drop_duplicates(
-                subset=["user"],
-                keep="first",
+        if payload["user"].eq("").any():
+            raise ValueError(
+                "Payload output contains empty user identifiers."
             )
+
+        payload["payload_score"] = pd.to_numeric(
+            payload["payload_score"], errors="coerce"
         )
 
-        anomaly = (
-            anomaly
-            .drop_duplicates(
-                subset=["user"],
-                keep="first",
+        if payload["payload_score"].isna().any():
+            raise ValueError(
+                "Payload output contains missing or invalid scores."
             )
+
+        payload["payload_score"] = payload["payload_score"].clip(0, 100)
+
+        # Aggregate multiple payloads belonging to the same user.
+        # Mean score is used; this policy can be changed after validation.
+        payload = (
+            payload.groupby("user", as_index=False)
+            ["payload_score"].mean()
         )
 
-        # ----------------------------------------------------
-        # Merge
-        # ----------------------------------------------------
-
-        merged = pd.merge(
-            insider,
+        merged = insider.merge(
             anomaly,
             on="user",
             how="outer",
+            validate="one_to_one",
         )
 
-        # ----------------------------------------------------
-        # Missing module scores = 0
-        # ----------------------------------------------------
-
-        merged["insider_score"] = (
-            merged["insider_score"]
-            .fillna(0)
-            .clip(0, 100)
+        merged = merged.merge(
+            payload,
+            on="user",
+            how="outer",
+            validate="one_to_one",
         )
 
-        merged["anomaly_score"] = (
-            merged["anomaly_score"]
-            .fillna(0)
-            .clip(0, 100)
-        )
+        # Do not silently replace missing module scores with zero.
+        score_columns = [
+            "payload_score",
+            "insider_score",
+            "anomaly_score",
+        ]
 
-        merged["is_insider"] = (
-            merged["is_insider"]
-            .fillna(0)
-            .astype(int)
-        )
+        missing_scores = merged[score_columns].isna()
 
-        merged["is_anomaly"] = (
-            merged["is_anomaly"]
-            .fillna(0)
-            .astype(int)
-        )
+        if missing_scores.any().any():
+            affected = merged.loc[
+                missing_scores.any(axis=1), "user"
+            ].tolist()
+
+            raise ValueError(
+                "Some users lack scores from one or more modules. "
+                "Resolve the missing user-to-module mappings before "
+                f"fusion. Example affected users: {affected[:10]}"
+            )
+
+        merged["is_insider"] = merged["is_insider"].fillna(0).astype(int)
+        merged["is_anomaly"] = merged["is_anomaly"].fillna(0).astype(int)
 
         return merged
 
     # ========================================================
-    # CALCULATE FINAL SCORE
+    # CALCULATE THREE-MODULE FUSION SCORE
     # ========================================================
 
-    def calculate_score(
-        self,
-        merged_df,
-    ):
+    def calculate_score(self, merged_df):
 
         result = merged_df.copy()
 
         result["final_score"] = (
-            self.insider_weight
-            * result["insider_score"]
-            +
-            self.anomaly_weight
-            * result["anomaly_score"]
-        )
-
-        result["final_score"] = (
-            result["final_score"]
-            .clip(0, 100)
-            .round(4)
-        )
+            self.payload_weight * result["payload_score"]
+            + self.insider_weight * result["insider_score"]
+            + self.anomaly_weight * result["anomaly_score"]
+        ).clip(0, 100).round(4)
 
         return result
 
@@ -254,49 +236,28 @@ class FusionEngine:
         return "NORMAL"
 
     # ========================================================
-    # ADD DECISION
-    # ========================================================
-
-    def add_decisions(
-        self,
-        df,
-    ):
-
-        result = df.copy()
-
-        result["decision"] = (
-            result["final_score"]
-            .apply(
-                self.assign_decision
-            )
-        )
-
-        return result
-
-    # ========================================================
     # COMPLETE FUSION
     # ========================================================
 
-    def fuse(
-        self,
-        insider_df,
-        anomaly_df,
-    ):
+    def fuse(self, insider_df, anomaly_df, payload_df):
 
         merged = self.prepare_inputs(
             insider_df,
             anomaly_df,
+            payload_df,
         )
 
-        scored = self.calculate_score(
-            merged
+        merged["decision"] = (
+            self.calculate_score(merged)["final_score"]
+            .apply(self.assign_decision)
         )
 
-        result = self.add_decisions(
-            scored
+        result = self.calculate_score(merged)
+
+        result["decision"] = result["final_score"].apply(
+            self.assign_decision
         )
 
-        # Sort highest risk first.
         result = result.sort_values(
             by="final_score",
             ascending=False,

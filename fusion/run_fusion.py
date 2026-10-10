@@ -1,158 +1,85 @@
+
 import pandas as pd
 
 from .config import (
     ANOMALY_OUTPUT,
     FUSION_OUTPUT,
     INSIDER_OUTPUT,
+    PAYLOAD_OUTPUT,
     OUTPUT_DIR,
 )
 
 from .fusion_engine import FusionEngine
 
 
+def load_csv(path, module_name):
+    print(f"\nLoading {module_name} output...")
+    print(path)
+
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{module_name} output not found: {path}"
+        )
+
+    df = pd.read_csv(path)
+
+    if df.empty:
+        raise ValueError(f"{module_name} output is empty: {path}")
+
+    print(f"Loaded {len(df):,} rows.")
+    return df
+
+
 def main():
 
     print("=" * 70)
-    print("FUSION MODULE")
+    print("FADE - THREE-MODULE FUSION")
     print("=" * 70)
 
-    # --------------------------------------------------------
-    # Create output directory
-    # --------------------------------------------------------
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    insider_df = load_csv(INSIDER_OUTPUT, "Insider")
+    anomaly_df = load_csv(ANOMALY_OUTPUT, "Anomaly")
+    payload_df = load_csv(PAYLOAD_OUTPUT, "Payload")
 
-    # --------------------------------------------------------
-    # Load Insider output
-    # --------------------------------------------------------
+    # Payload scores must be linked to actual users.
+    if "user" not in payload_df.columns:
+        raise ValueError(
+            "\nPayload fusion cannot proceed yet.\n"
+            "payload_scores.csv currently contains individual payload "
+            "samples, not user identifiers.\n"
+            "Add a genuine user/session mapping to the payload data "
+            "and regenerate the scores before combining them with "
+            "user-level Insider and Anomaly scores."
+        )
 
-    print("\n[1/4] Loading Insider Module output...")
-
-    print(INSIDER_OUTPUT)
-
-    insider_df = pd.read_csv(
-        INSIDER_OUTPUT
-    )
-
-    print(
-        f"✓ Insider users: "
-        f"{len(insider_df):,}"
-    )
-
-    # --------------------------------------------------------
-    # Load Anomaly output
-    # --------------------------------------------------------
-
-    print("\n[2/4] Loading Anomaly Module output...")
-
-    print(ANOMALY_OUTPUT)
-
-    anomaly_df = pd.read_csv(
-        ANOMALY_OUTPUT
-    )
-
-    print(
-        f"✓ Anomaly users: "
-        f"{len(anomaly_df):,}"
-    )
-
-    # --------------------------------------------------------
-    # Fusion
-    # --------------------------------------------------------
-
-    print("\n[3/4] Performing score fusion...")
+    print("\nPerforming three-module fusion...")
 
     engine = FusionEngine()
 
     results = engine.fuse(
-        insider_df,
-        anomaly_df,
+        insider_df=insider_df,
+        anomaly_df=anomaly_df,
+        payload_df=payload_df,
     )
 
-    print(
-        "✓ Fusion completed."
-    )
+    results.to_csv(FUSION_OUTPUT, index=False)
 
-    # --------------------------------------------------------
-    # Save
-    # --------------------------------------------------------
-
-    results.to_csv(
-        FUSION_OUTPUT,
-        index=False,
-    )
-
-    print("\n[4/4] Saving results...")
-
-    print(
-        f"✓ Fusion output saved to:"
-    )
-
-    print(
-        FUSION_OUTPUT
-    )
-
-    # --------------------------------------------------------
-    # Results
-    # --------------------------------------------------------
-
-    print(
-        "\n" + "=" * 70
-    )
-
-    print(
-        "FUSION RESULTS"
-    )
-
-    print(
-        "=" * 70
-    )
-
-    print("\nColumns:")
-
-    print(
-        results.columns.tolist()
-    )
+    print(f"\nFusion results saved to:\n{FUSION_OUTPUT}")
 
     print("\nTop 10 highest-risk users:")
-
-    print(
-        results.head(10)
-        .to_string(index=False)
-    )
+    print(results.head(10).to_string(index=False))
 
     print("\nDecision distribution:")
+    print(results["decision"].value_counts().to_string())
 
     print(
-        results["decision"]
-        .value_counts()
+        "\nAverage fusion score:",
+        round(results["final_score"].mean(), 4),
     )
 
-    print("\nAverage final score:")
-
-    print(
-        round(
-            results["final_score"].mean(),
-            4,
-        )
-    )
-
-    print(
-        "\n" + "=" * 70
-    )
-
-    print(
-        "FUSION MODULE COMPLETE"
-    )
-
-    print(
-        "=" * 70
-    )
+    print("\nThree-module fusion completed.")
 
 
 if __name__ == "__main__":
-
     main()
