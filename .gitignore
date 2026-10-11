@@ -38,3 +38,6 @@ insider_module/outputs/
 
 # XAI generated outputs
 xai/outputs/*.csv
+
+# Adaptive Firewall generated outputs
+adaptive_firewall/outputs/*.csv
