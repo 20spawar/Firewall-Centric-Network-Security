@@ -14,8 +14,8 @@ logs/
 *.log
 
 # Models
-# models/*.pkl
-# models/*.joblib
+models/*.pkl
+models/*.joblib
 
 # Data
 data/raw/
@@ -26,8 +26,18 @@ data/processed/
 
 # Environment Variables
 .env
-# XAI generated outputs
-xai/outputs/*.csv
+
+# Anomaly Module generated outputs
+anomaly_module/outputs/*.csv
+
+# Fusion generated outputs
+fusion/outputs/*.csv
+
+# Insider Module generated outputs
+insider_module/outputs/
 
 # XAI generated outputs
 xai/outputs/*.csv
+
+# Adaptive Firewall generated outputs
+adaptive_firewall/outputs/*.csv
