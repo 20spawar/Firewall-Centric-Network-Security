@@ -35,3 +35,6 @@ fusion/outputs/*.csv
 
 # Insider Module generated outputs
 insider_module/outputs/
+
+# XAI generated outputs
+xai/outputs/*.csv
